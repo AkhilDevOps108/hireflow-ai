@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import io
 import re
 from typing import Any
@@ -183,7 +184,7 @@ def extract_candidate_email(text: str) -> str:
 
 def extract_candidate_name(text: str) -> str:
     for marker in ["Name:", "Candidate Name:", "Full Name:"]:
-        match = re.search(rf"{re.escape(marker)}\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)+)", text)
+        match = re.search(rf"{re.escape(marker)}\s*([A-Z][A-Za-z]+(?:[ \t]+[A-Z][A-Za-z]+)+)", text)
         if match:
             return match.group(1).strip()
 
@@ -618,7 +619,11 @@ def search_candidates_with_query(query: str, job: Job | None = None, llm_hint: s
     results: list[dict[str, Any]] = []
     for candidate in candidates:
         skills_norm = {normalize_skill(skill) for skill in candidate.skills}
-        has_required = all(normalize_skill(skill) in skills_norm for skill in filters["required_skills"]) if filters["required_skills"] else True
+        required = [normalize_skill(skill) for skill in filters["required_skills"]]
+        required = [skill for skill in required if skill]
+        matched_required = [skill for skill in required if skill in skills_norm]
+        minimum_required_matches = max(1, math.ceil(len(required) * 0.4)) if required else 0
+        has_required = len(matched_required) >= minimum_required_matches if required else True
         has_excluded = any(normalize_skill(skill) in skills_norm for skill in filters["excluded_skills"])
         if not has_required or has_excluded:
             continue
@@ -641,6 +646,8 @@ def search_candidates_with_query(query: str, job: Job | None = None, llm_hint: s
                 "skills": candidate.skills,
                 "match_score": score,
                 "relevance_score": lexical_score,
+                "matched_required_skills": matched_required,
+                "required_skill_match_ratio": round((len(matched_required) / len(required)) if required else 1.0, 2),
             }
         )
 

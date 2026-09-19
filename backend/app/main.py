@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -128,6 +129,77 @@ def build_top_ai_candidates_answer() -> str:
             f"{index}. {name} ({email}) - score {score}% | experience {experience:.1f} years | AI skills: {', '.join(matched)}"
         )
     return "\n".join(lines)
+
+
+def _requested_candidate_count(query: str, default: int = 5) -> int:
+    lowered = query.lower()
+    patterns = [
+        r"top\s+(\d+)\s+candidates?",
+        r"(\d+)\s+top\s+candidates?",
+        r"need\s+(\d+)\s+candidates?",
+        r"show\s+(\d+)\s+candidates?",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, lowered)
+        if match:
+            return max(1, min(10, int(match.group(1))))
+    return default
+
+
+def _extract_phone_from_content(content: str) -> str:
+    matches = re.findall(r"(?:\+?\d[\d\s\-()]{7,}\d)", content)
+    for raw in matches:
+        digits = re.sub(r"\D", "", raw)
+        if len(digits) >= 10:
+            return re.sub(r"\s+", " ", raw).strip()
+    return "N/A"
+
+
+def _extract_companies_from_content(content: str) -> list[str]:
+    found = re.findall(r"(?:company|client)\s*:?\s*([^\n\r]+)", content, flags=re.IGNORECASE)
+    cleaned: list[str] = []
+    for item in found:
+        token = item.strip(" .,-")
+        token = re.sub(r"\s{2,}", " ", token)
+        token = re.split(r"\s{2,}|\s+-\s+|\s+\d{4}", token)[0].strip()
+        if token and token.lower() not in {c.lower() for c in cleaned}:
+            cleaned.append(token)
+    return cleaned[:3]
+
+
+def _is_structured_candidate_request(query: str) -> bool:
+    lowered = query.lower()
+    hints = ["candidate", "candidates", "jd", "job description", "matching", "top", "role"]
+    return any(hint in lowered for hint in hints)
+
+
+def build_structured_candidates_table(query: str) -> str:
+    count = _requested_candidate_count(query, default=5)
+    output = search_candidates_with_query(query, job=None, llm_hint="")
+    results = output.get("results", [])[:count]
+    if not results:
+        return "No matching candidates found for this JD query. Upload more resumes or broaden required skills."
+
+    header = [
+        "| Rank | Name | Email | Phone | Experience | Key Skills | Companies |",
+        "|---|---|---|---|---:|---|---|",
+    ]
+    rows: list[str] = []
+    for index, item in enumerate(results, start=1):
+        candidate = candidates_store.get(item.get("candidate_id", ""))
+        content = candidate.content if candidate else ""
+        phone = _extract_phone_from_content(content) if content else "N/A"
+        companies = _extract_companies_from_content(content) if content else []
+        company_text = ", ".join(companies) if companies else "N/A"
+        skills_text = ", ".join(item.get("skills", [])[:6]) or "N/A"
+        rows.append(
+            "| "
+            f"{index} | {item.get('name', 'N/A')} | {item.get('email', 'N/A')} | {phone} | "
+            f"{float(item.get('experience_years', 0)):.1f} yrs | {skills_text} | {company_text} |"
+        )
+
+    intro = f"Top {len(results)} candidates matching your JD request:"
+    return "\n".join([intro, *header, *rows])
 
 
 def create_audit_event(entity_type: str, entity_id: str, action: str, actor: str, details: dict[str, object] | None = None) -> None:
@@ -398,6 +470,9 @@ def recruiter_agent_chat(payload: AgentChatRequest = Body(...)):
     if tool == "get_top_candidates" and ("ai" in lower_message or "ml" in lower_message or "genai" in lower_message or "llm" in lower_message):
         response_text = build_top_ai_candidates_answer()
         rag_hits = []
+    elif _is_structured_candidate_request(payload.message):
+        response_text = build_structured_candidates_table(payload.message)
+        rag_hits = []
     else:
         rag_hits = query_index(payload.message, top_k=5)
         rag_context = summarize_hits(rag_hits)
@@ -409,6 +484,15 @@ def recruiter_agent_chat(payload: AgentChatRequest = Body(...)):
                 "If evidence is insufficient, say what is missing."
             ),
         )
+
+        if "local fallback mode" in response_text.lower():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "LLM provider is unavailable. Assistant fallback is disabled for chat queries. "
+                    "Check API key validity, model availability, and billing status."
+                ),
+            )
 
     create_audit_event(
         "agent",

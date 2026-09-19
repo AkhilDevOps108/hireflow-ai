@@ -43,16 +43,30 @@ class GeminiProvider:
             }
 
             full_input = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-            interaction = client.interactions.create(
-                model=self.model,
-                input=full_input,
-                tools=tools,
-                generation_config=generation_config,
-            )
 
-            if not interaction.steps:
+            # Newer SDK surface
+            if hasattr(client, "interactions") and hasattr(client.interactions, "create"):
+                interaction = client.interactions.create(
+                    model=self.model,
+                    input=full_input,
+                    tools=tools,
+                    generation_config=generation_config,
+                )
+                if getattr(interaction, "steps", None):
+                    return str(interaction.steps[-1])
                 return "No response received from Gemini interaction."
-            return str(interaction.steps[-1])
+
+            # Backward-compatible SDK surface
+            if hasattr(client, "models") and hasattr(client.models, "generate_content"):
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=full_input,
+                )
+                if hasattr(response, "text") and response.text:
+                    return str(response.text).strip()
+                return str(response)
+
+            return "Gemini SDK is available but no supported generation API surface was found."
         except Exception:
             return LocalFallbackProvider().generate(prompt, system_prompt=system_prompt)
 

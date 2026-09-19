@@ -42,10 +42,11 @@ export function AICopilot() {
         { role: 'assistant', text: response.answer, tool: response.tool },
       ]);
     },
-    onError: () => {
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'I could not complete that request right now.';
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', text: 'I could not complete that request right now. Please retry.' },
+        { role: 'assistant', text: message },
       ]);
     },
   });

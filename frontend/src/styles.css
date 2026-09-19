@@ -844,6 +844,7 @@ label span {
 .copilot-message p {
   margin: 0;
   color: #e5e7eb;
+  white-space: pre-wrap;
 }
 
 .tool-steps {
