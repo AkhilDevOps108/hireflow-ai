@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.rag as rag_module
 from app.main import app
 
 client = TestClient(app)
@@ -128,6 +129,33 @@ def test_rag_query_returns_hits_for_uploaded_candidate() -> None:
     rag_response = client.post(
         "/rag/query",
         json={"query": "kubernetes aws terraform", "top_k": 3, "entity_type": "candidate"},
+    )
+    assert rag_response.status_code == 200
+    body = rag_response.json()
+    assert body["count"] >= 1
+    assert len(body["hits"]) >= 1
+
+
+def test_rag_query_falls_back_when_dense_search_errors(monkeypatch) -> None:
+    upload = client.post(
+        "/candidates/upload",
+        files={
+            "file": (
+                "candidate_rag_fallback.txt",
+                b"Bob Smith\nEmail: bob@example.com\nPython AWS Kubernetes Terraform Docker\n",
+                "text/plain",
+            )
+        },
+    )
+    assert upload.status_code == 200
+
+    def broken_dense(*args, **kwargs):
+        raise RuntimeError("dense retrieval failure")
+
+    monkeypatch.setattr(rag_module, "_dense_query_scores", broken_dense)
+    rag_response = client.post(
+        "/rag/query",
+        json={"query": "python aws kubernetes", "top_k": 3, "entity_type": "candidate"},
     )
     assert rag_response.status_code == 200
     body = rag_response.json()
