@@ -50,6 +50,7 @@ export function uploadCandidate(file: File) {
   return apiFetch<Candidate>('/candidates/upload', {
     method: 'POST',
     body: formData,
+    timeoutMs: 120000,
   });
 }
 

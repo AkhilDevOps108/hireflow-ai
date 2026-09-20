@@ -8,6 +8,83 @@ type ChatMessage = {
   text: string;
 };
 
+type ParsedTable = {
+  beforeText: string;
+  headers: string[];
+  rows: string[][];
+  afterText: string;
+};
+
+function parseMarkdownTable(text: string): ParsedTable | null {
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => line.trim().startsWith('|'));
+  if (start < 0 || start + 2 >= lines.length) {
+    return null;
+  }
+
+  const divider = lines[start + 1].trim();
+  if (!divider.startsWith('|') || !divider.includes('---')) {
+    return null;
+  }
+
+  let end = start + 2;
+  while (end < lines.length && lines[end].trim().startsWith('|')) {
+    end += 1;
+  }
+
+  const headerLine = lines[start].trim();
+  const rowLines = lines.slice(start + 2, end);
+  const headers = headerLine.split('|').map((item) => item.trim()).filter(Boolean);
+  const rows = rowLines
+    .map((line) => line.split('|').map((item) => item.trim()).filter(Boolean))
+    .filter((row) => row.length > 0);
+
+  if (!headers.length || !rows.length) {
+    return null;
+  }
+
+  return {
+    beforeText: lines.slice(0, start).join('\n').trim(),
+    headers,
+    rows,
+    afterText: lines.slice(end).join('\n').trim(),
+  };
+}
+
+function renderAssistantContent(text: string) {
+  const parsed = parseMarkdownTable(text);
+  if (!parsed) {
+    return <div className="chat-message-content">{text}</div>;
+  }
+
+  return (
+    <div className="chat-message-content chat-rich-content">
+      {parsed.beforeText ? <p>{parsed.beforeText}</p> : null}
+      <div className="chat-table-wrap">
+        <table className="chat-table">
+          <thead>
+            <tr>
+              {parsed.headers.map((header) => (
+                <th key={header}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {parsed.rows.map((row, rowIndex) => (
+              <tr key={`${rowIndex}-${row.join('-')}`}>
+                {parsed.headers.map((_, colIndex) => (
+                  <td key={`${rowIndex}-${colIndex}`}>{row[colIndex] ?? '-'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {parsed.afterText ? <p>{parsed.afterText}</p> : null}
+    </div>
+  );
+}
+
 export function ChatPage() {
   const navigate = useNavigate();
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -117,7 +194,7 @@ export function ChatPage() {
             <div key={`${message.role}-${index}`} className={`chat-message ${message.role}`}>
               <div className="chat-message-content-wrap">
                 <div className="chat-message-label">{message.role === 'assistant' ? 'Copilot' : 'You'}</div>
-                <div className="chat-message-content">{message.text}</div>
+                {message.role === 'assistant' ? renderAssistantContent(message.text) : <div className="chat-message-content">{message.text}</div>}
               </div>
             </div>
           ))}

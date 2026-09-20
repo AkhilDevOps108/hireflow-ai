@@ -96,7 +96,84 @@ class RAGQueryRequest(BaseModel):
 
 
 def _is_structured_candidate_request(query: str) -> bool:
-    return False  # Disabled: all requests go to LLM-only mode
+    lowered = query.lower()
+    must_have_any = [
+        "candidate",
+        "candidates",
+        "role",
+        "engineer",
+        "developer",
+        "mlops",
+        "ai",
+    ]
+    return any(token in lowered for token in must_have_any)
+
+
+def _extract_role_terms(query: str) -> list[str]:
+    lowered = query.lower()
+    words = re.findall(r"[a-z0-9+#\-]+", lowered)
+    stop_words = {
+        "i", "need", "a", "an", "the", "for", "to", "me", "show", "find", "give", "any", "details",
+        "candidate", "candidates", "role", "engineer", "developers", "developer", "with", "and", "or",
+        "of", "in", "on", "at", "please", "hi",
+    }
+    return [word for word in words if word not in stop_words and len(word) > 1]
+
+
+def _score_candidate_for_terms(candidate, terms: list[str]) -> int:
+    haystack = f"{candidate.name} {candidate.email} {' '.join(candidate.skills)} {candidate.content}".lower()
+    if not terms:
+        return 1
+    return sum(1 for term in terms if term in haystack)
+
+
+def _format_candidate_table(candidates: list[object]) -> str:
+    if not candidates:
+        return "No matching candidates found in indexed resumes."
+
+    header = "| Name | Email | Experience | Skills | Candidate ID |"
+    divider = "|---|---|---:|---|---|"
+    rows: list[str] = []
+    for candidate in candidates:
+        skills = ", ".join(candidate.skills[:5]) if candidate.skills else "-"
+        experience = f"{candidate.experience_years:.1f} yrs" if candidate.experience_years is not None else "-"
+        rows.append(
+            f"| {candidate.name or '-'} | {candidate.email or '-'} | {experience} | {skills} | {candidate.id} |"
+        )
+    return "\n".join([header, divider, *rows])
+
+
+def _build_structured_candidate_answer(query: str, rag_hits: list[dict[str, object]]) -> str | None:
+    candidate_ids: list[str] = []
+    for hit in rag_hits:
+        if hit.get("entity_type") != "candidate":
+            continue
+        entity_id = str(hit.get("entity_id") or "").strip()
+        if entity_id and entity_id not in candidate_ids:
+            candidate_ids.append(entity_id)
+
+    if not candidate_ids:
+        return (
+            "I could not find matching candidates in indexed resumes.\n\n"
+            "Missing evidence:\n"
+            "- Candidate resumes with relevant role keywords\n"
+            "- Skills/experience details for the requested role"
+        )
+
+    terms = _extract_role_terms(query)
+    resolved_candidates = [candidates_store[cid] for cid in candidate_ids if cid in candidates_store]
+    ranked = sorted(
+        resolved_candidates,
+        key=lambda candidate: _score_candidate_for_terms(candidate, terms),
+        reverse=True,
+    )
+    top = ranked[:5]
+    if not top:
+        return None
+
+    summary = f"Found {len(top)} candidate(s) for your request."
+    table = _format_candidate_table(top)
+    return f"{summary}\n\n{table}\n\nTip: Open a candidate profile for full project and qualification details."
 
 
 def create_audit_event(entity_type: str, entity_id: str, action: str, actor: str, details: dict[str, object] | None = None) -> None:
@@ -362,6 +439,19 @@ def recruiter_agent_chat(payload: AgentChatRequest = Body(...)):
     If LLM fails, error is shown in chat.
     """
     rag_hits = query_index(payload.message, top_k=5)
+
+    if _is_structured_candidate_request(payload.message):
+        structured = _build_structured_candidate_answer(payload.message, rag_hits)
+        if structured:
+            create_audit_event(
+                "agent",
+                "copilot",
+                "agent_query_executed",
+                "recruiter",
+                {"query": payload.message, "retrieved_chunks": len(rag_hits), "mode": "structured_table"},
+            )
+            return {"answer": structured, "status": "ready", "citations": rag_hits}
+
     rag_context = summarize_hits(rag_hits)
     provider = get_llm_provider()
     

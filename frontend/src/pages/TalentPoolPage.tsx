@@ -1,34 +1,34 @@
 import { ChangeEvent, DragEvent, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getCandidates, queryCandidatesNaturalLanguage, uploadCandidate } from '../api/hireflow';
+import { getCandidates, uploadCandidate } from '../api/hireflow';
 
 type UploadStatus = {
+  id: string;
   name: string;
   status: 'uploaded' | 'processing' | 'ready' | 'failed';
+  error?: string;
 };
 
 export function TalentPoolPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [nlQuery, setNlQuery] = useState('');
   const [uploadStatus, setUploadStatus] = useState<UploadStatus[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [queryResults, setQueryResults] = useState<{ query: string; count: number; results: { candidate_id: string; name: string; email: string; experience_years: number; skills: string[]; match_score: number }[] } | null>(null);
 
   const candidatesQuery = useQuery({ queryKey: ['candidates'], queryFn: getCandidates });
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => uploadCandidate(file),
-    onSuccess: () => {
+    onSuccess: (candidate) => {
+      queryClient.setQueryData(['candidates'], (previous: typeof candidatesQuery.data) => {
+        const current = previous ?? [];
+        if (current.some((row) => row.id === candidate.id)) {
+          return current;
+        }
+        return [candidate, ...current];
+      });
       void queryClient.invalidateQueries({ queryKey: ['candidates'] });
-    },
-  });
-
-  const queryMutation = useMutation({
-    mutationFn: async (query: string) => queryCandidatesNaturalLanguage(query),
-    onSuccess: (result) => {
-      setQueryResults(result);
     },
   });
 
@@ -50,15 +50,27 @@ export function TalentPoolPage() {
       return;
     }
 
-    setUploadStatus((prev) => [...prev, ...list.map((file) => ({ name: file.name, status: 'uploaded' as const }))]);
+    const entries = list.map((file, index) => ({
+      id: `${file.name}-${Date.now()}-${index}`,
+      name: file.name,
+      status: 'uploaded' as const,
+    }));
 
-    for (const file of list) {
-      setUploadStatus((prev) => prev.map((row) => (row.name === file.name ? { ...row, status: 'processing' } : row)));
+    setUploadStatus((prev) => [...prev, ...entries]);
+
+    for (const [index, entry] of entries.entries()) {
+      const file = list[index];
+      if (!file) {
+        continue;
+      }
+
+      setUploadStatus((prev) => prev.map((row) => (row.id === entry.id ? { ...row, status: 'processing', error: undefined } : row)));
       try {
         await uploadMutation.mutateAsync(file);
-        setUploadStatus((prev) => prev.map((row) => (row.name === file.name ? { ...row, status: 'ready' } : row)));
-      } catch {
-        setUploadStatus((prev) => prev.map((row) => (row.name === file.name ? { ...row, status: 'failed' } : row)));
+        setUploadStatus((prev) => prev.map((row) => (row.id === entry.id ? { ...row, status: 'ready' } : row)));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Upload failed';
+        setUploadStatus((prev) => prev.map((row) => (row.id === entry.id ? { ...row, status: 'failed', error: message } : row)));
       }
     }
   };
@@ -82,7 +94,6 @@ export function TalentPoolPage() {
   const counts = {
     uploaded: uploadStatus.length,
     processing: uploadStatus.filter((item) => item.status === 'processing').length,
-    ready: uploadStatus.filter((item) => item.status === 'ready').length,
     failed: uploadStatus.filter((item) => item.status === 'failed').length,
   };
 
@@ -112,9 +123,22 @@ export function TalentPoolPage() {
         <div className="upload-stats">
           <span>Uploaded: {counts.uploaded}</span>
           <span>Processing: {counts.processing}</span>
-          <span>Complete: {counts.ready}</span>
           <span>Failed: {counts.failed}</span>
         </div>
+
+        {uploadStatus.some((item) => item.status !== 'ready') ? (
+          <div className="upload-results">
+            {uploadStatus
+              .filter((item) => item.status !== 'ready')
+              .slice(-8)
+              .map((item) => (
+              <div key={item.id} className={`upload-item ${item.status}`}>
+                <span>{item.name}</span>
+                <span>{item.status === 'failed' && item.error ? item.error : item.status}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="panel">
@@ -127,39 +151,8 @@ export function TalentPoolPage() {
               placeholder="Search name, email, skill, experience..."
               aria-label="Search talent pool"
             />
-            <div className="inline-actions">
-              <input
-                className="table-search"
-                value={nlQuery}
-                onChange={(event) => setNlQuery(event.target.value)}
-                placeholder="Natural language query: candidates with AWS and Kubernetes over 5 years"
-                aria-label="Natural language candidate query"
-              />
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={() => {
-                  const query = nlQuery.trim();
-                  if (!query) {
-                    return;
-                  }
-                  queryMutation.mutate(query);
-                }}
-              >
-                Run Query
-              </button>
-            </div>
           </div>
         </div>
-
-        {queryResults ? (
-          <div className="analysis-box" style={{ marginBottom: 10 }}>
-            <strong>Query Result</strong>
-            <p>
-              "{queryResults.query}" returned {queryResults.count} candidates.
-            </p>
-          </div>
-        ) : null}
 
         <div className="table-wrap">
           <table>
@@ -175,24 +168,24 @@ export function TalentPoolPage() {
               </tr>
             </thead>
             <tbody>
-              {(queryResults ? queryResults.results : filtered).map((candidate, index) => (
-                <tr key={'candidate_id' in candidate ? candidate.candidate_id : candidate.id}>
+              {filtered.map((candidate, index) => (
+                <tr key={candidate.id}>
                   <td>{candidate.name}</td>
                   <td>{candidate.email}</td>
                   <td>{candidate.experience_years.toFixed(1)} yrs</td>
                   <td>{candidate.skills.slice(0, 4).join(' · ') || '-'}</td>
-                  <td>{'match_score' in candidate && candidate.match_score ? `${candidate.match_score}%` : `${Math.max(70, 94 - index * 3)}%`}</td>
+                  <td>{`${Math.max(70, 94 - index * 3)}%`}</td>
                   <td>{index * 12 + 6} min ago</td>
                   <td>
                     <div className="row-actions">
-                      <Link to={`/candidates/${'candidate_id' in candidate ? candidate.candidate_id : candidate.id}`}>View</Link>
+                      <Link to={`/candidates/${candidate.id}`}>View</Link>
                       <button type="button" className="link-like">Compare</button>
                       <button type="button" className="link-like">Assign to Job</button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {!(queryResults ? queryResults.results.length : filtered.length) ? <tr><td colSpan={7} className="empty-cell">No candidates yet. Upload resumes to begin matching.</td></tr> : null}
+              {!filtered.length ? <tr><td colSpan={7} className="empty-cell">No candidates yet. Upload resumes to begin matching.</td></tr> : null}
             </tbody>
           </table>
         </div>

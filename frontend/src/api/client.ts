@@ -1,3 +1,7 @@
+type ApiFetchOptions = RequestInit & {
+  timeoutMs?: number;
+};
+
 function resolveApiBase() {
   const override = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
   if (override) return override;
@@ -15,8 +19,10 @@ function resolveApiBase() {
 const API_BASE = resolveApiBase();
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const requestOptions = options as ApiFetchOptions | undefined;
+  const timeoutMs = requestOptions?.timeoutMs ?? 12000;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   if (options?.signal) {
     options.signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
