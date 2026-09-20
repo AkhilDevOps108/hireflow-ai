@@ -20,7 +20,7 @@ const API_BASE = resolveApiBase();
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const requestOptions = options as ApiFetchOptions | undefined;
-  const timeoutMs = requestOptions?.timeoutMs ?? 12000;
+  const timeoutMs = requestOptions?.timeoutMs ?? 60000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   if (options?.signal) {

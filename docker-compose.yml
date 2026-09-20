@@ -33,8 +33,11 @@ services:
       JWT_SECRET: change-me-in-production
       APP_ENV: production
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_USE_ADC: ${GEMINI_USE_ADC:-true}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-models/gemini-3-flash-preview}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-agentguard-508813}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
       GEMINI_USE_GOOGLE_SEARCH: ${GEMINI_USE_GOOGLE_SEARCH:-false}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
@@ -48,6 +51,7 @@ services:
         condition: service_started
     volumes:
       - ./backend:/app
+      - ~/.config/gcloud:/root/.config/gcloud:ro
 
   frontend:
     build:

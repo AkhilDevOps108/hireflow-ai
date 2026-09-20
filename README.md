@@ -3,48 +3,58 @@
 ![Frontend](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-2563eb)
 ![Backend](https://img.shields.io/badge/Backend-FastAPI-16a34a)
 ![Runtime](https://img.shields.io/badge/Runtime-Docker%20Compose-0ea5e9)
-![LLM](https://img.shields.io/badge/LLM-Gemini-f59e0b)
+![Cloud](https://img.shields.io/badge/Cloud-Google%20Cloud%20VM-4285F4)
+![LLM](https://img.shields.io/badge/LLM-Google%20Vertex%20AI%20Gemini-2.5-flash-f59e0b)
 ![Retrieval](https://img.shields.io/badge/RAG-SentenceTransformers%20%2B%20FAISS-8b5cf6)
 
-> A fully open-sourced, recruiter-focused AI platform for transparent, explainable, and fair hiring decisions backed by deterministic logic and grounded evidence.
+> HireFlow is a recruiter-focused AI hiring platform that combines deterministic candidate scoring, hybrid retrieval, and grounded copilot responses powered by Google Cloud Vertex AI Gemini with Application Default Credentials (ADC).
 
 ## Table of Contents
 
 1. [Project Overview](#project-overview)
 2. [Problem & Solution](#problem--solution)
 3. [Key Features](#key-features)
-4. [Complete Tech Stack](#complete-tech-stack)
-5. [Architecture & Methods](#architecture--methods)
-6. [Hybrid RAG Retrieval System](#hybrid-rag-retrieval-system)
-7. [Core Components Deep Dive](#core-components-deep-dive)
-8. [API Reference](#api-reference)
-9. [Quick Start](#quick-start)
-10. [Troubleshooting](#troubleshooting)
-11. [Development Guide](#development-guide)
+4. [Current Runtime & Deployment](#current-runtime--deployment)
+5. [Complete Tech Stack](#complete-tech-stack)
+6. [Architecture & Methods](#architecture--methods)
+7. [API Reference](#api-reference)
+8. [Quick Start](#quick-start)
+9. [Troubleshooting](#troubleshooting)
+10. [Development Guide](#development-guide)
 
 ---
 
 ## Project Overview
 
-**HireFlow AI** is an end-to-end recruitment intelligence system that transforms unstructured resume and job data into actionable, auditable hiring decisions.
+**HireFlow AI** is an end-to-end recruitment intelligence system that transforms resume and job data into auditable, explainable hiring decisions.
 
-### What It Does
+### What It Does Today
 
-1. **Ingests** resumes (PDF/DOCX/TXT) and job descriptions
-2. **Extracts** candidate skills, experience, qualifications, and role requirements via regex + text parsing
-3. **Stores** structured candidate and job records in-memory with audit tracking
-4. **Retrieves** relevant evidence using hybrid dense + sparse semantic search (FAISS + SentenceTransformers)
-5. **Ranks** candidates deterministically using skill matching, experience validation, and weighted scoring
-6. **Answers** recruiter questions via LLM-backed agent with grounded evidence and citations
-7. **Generates** interview questions, analyzes notes, produces evaluation summaries
-8. **Audits** all actions and stores full decision trails for compliance
+1. **Ingests** resumes and job description files in multiple formats
+2. **Extracts** skills, experience, email, name, and role requirements
+3. **Ranks** candidates with deterministic logic based on evidence and requirement fit
+4. **Indexes** the candidate corpus with hybrid semantic retrieval using SentenceTransformers + FAISS
+5. **Answers** recruiter prompts through a grounded copilot chat that cites retrieved evidence
+6. **Generates** interview questions and evaluation summaries
+7. **Logs** all activities in an audit trail for transparency
+8. **Runs** on a Docker-based stack and is deployable on a Google Cloud VM using Vertex AI Gemini
+
+### Current Deployment Model
+
+This project is currently configured to run in a Docker Compose stack on a Google Cloud VM with:
+
+- **Google Cloud VM** for hosting the application
+- **Google Cloud project** used for Vertex AI access
+- **Gemini 2.5 Flash** model on Vertex AI
+- **Application Default Credentials (ADC)** instead of raw API keys for app authentication
+- **Environment variables** wired into the backend container via Docker Compose
 
 ### Who It's For
 
-- **Recruiters** seeking faster, fairer, transparent candidate screening
-- **Hiring Teams** that want explainability and consistent evaluation
-- **Compliance-conscious orgs** that need full audit trails and decision justification
-- **Teams** building AI-assisted workflows without vendor lock-in
+- Recruiters and hiring teams that need transparent candidate ranking
+- Operators who want explainable, evidence-first AI assistance
+- Teams preparing to deploy internal hiring tools on secure cloud infrastructure
+- Organizations that want to keep AI usage grounded in their own talent data
 
 ---
 
@@ -105,8 +115,17 @@ HireFlow replaces manual workflows with:
 - **LLM Response**: Grounded answer forced to cite evidence, explicit error if LLM fails (no fallback text)
 - **Citations**: Returned chunks show exactly where evidence came from
 - **Tool Selection**: Router decides whether to use search_candidates, get_top_candidates, or structured_table
+- **Current Cloud Setup**: The app is configured to use Google Vertex AI Gemini via ADC and the `GOOGLE_CLOUD_PROJECT` environment value instead of a traditional API key
 
-### 6. Structured Interview Intelligence
+### 6. GCP VM + Vertex AI Deployment
+- **Runtime host**: Google Cloud VM (Compute Engine or equivalent Linux VM)
+- **Containerization**: Docker + Docker Compose for backend, frontend, PostgreSQL, and Redis
+- **LLM provider**: Google Vertex AI Gemini `gemini-2.5-flash`
+- **Auth model**: Application Default Credentials (`gcloud auth application-default login`)
+- **Project config**: `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` injected into the backend container
+- **Why this matters**: Keeps the app compatible with enterprise Google Cloud auth and avoids hardcoding API keys in the container runtime
+
+### 7. Structured Interview Intelligence
 - **Question Generation**: Role-specific template-based question sets
 - **Follow-Up**: Context-aware follow-up suggestions based on answers
 - **Note Analysis**: Interview notes parsed for skill mentions, behavioral signals, concerns
@@ -175,14 +194,22 @@ HireFlow replaces manual workflows with:
 
 | Library | Version | Purpose |
 |---|---|---|
-| **google-genai** | 0.7.0 | Google Gemini API client (primary LLM) |
+| **google-genai** | 0.7.0 | Google Gemini API client for Vertex AI and ADC-backed access |
 | **openai** | 1.52.2 | OpenAI-compatible API support (fallback) |
 | **langgraph** | 0.2.53 | Agent orchestration and tool routing (future enhancement) |
 | **langchain-core** | 0.3.38 | Prompt engineering and LLM abstractions |
 
+**Current Production Setup**:
+- **Model**: `gemini-2.5-flash` on Google Vertex AI
+- **Environment**: `LLM_PROVIDER=gemini`, `GEMINI_USE_ADC=true`
+- **Auth**: Application Default Credentials mounted from the VM host into the Docker container
+- **Region**: `us-central1` by default
+- **Project**: configured via `GOOGLE_CLOUD_PROJECT`
+
 **Provider Layer**: [backend/app/providers.py](backend/app/providers.py)  
-- Abstracts Gemini and OpenAI-compatible APIs behind unified interface
-- Env-driven provider selection (LLM_PROVIDER=gemini or openai)
+- Abstracts Gemini and OpenAI-compatible APIs behind a unified interface
+- Uses ADC when `GEMINI_USE_ADC=true`
+- Falls back locally only when the project or credentials are not valid
 - Supports both `models.generate_content` and `interactions.create` Gemini surfaces
 
 #### Database & Storage (Optional/Future)
@@ -685,7 +712,7 @@ Response:
 
 ---
 
-## Quick Start (5 Minutes)
+## Quick Start
 
 ### 1) Prerequisites
 
@@ -693,61 +720,74 @@ Response:
 # Check Docker installation
 docker --version
 docker compose --version
+
+# Check Google Cloud SDK
+gcloud --version
 ```
 
-Required: Docker 20+, Docker Compose 2+, Gemini API key
+Required:
+- Docker 20+
+- Docker Compose 2+
+- Google Cloud SDK configured with a project that has Vertex AI enabled
+- A user account with permission to use Vertex AI and Application Default Credentials
 
-### 2) Clone & Configure
+### 2) Configure Google Cloud Authentication
+
+On the VM or dev machine, authenticate ADC:
 
 ```bash
-git clone https://github.com/yourusername/hireflow-ai.git
+gcloud auth application-default login --project <your-gcp-project-id>
+export GOOGLE_CLOUD_PROJECT=<your-gcp-project-id>
+export GOOGLE_CLOUD_LOCATION=us-central1
+```
+
+This is the current pattern used by the app. The backend mounts your host ADC file into the container and uses ADC automatically when `GEMINI_USE_ADC=true`.
+
+### 3) Start the Stack
+
+```bash
+git clone <repo-url>
 cd hireflow-ai
-
-# Copy environment template
-cp .env.example .env
-
-# Edit .env and set
-```
-
-**Required in .env**:
-```bash
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=models/gemini-3-flash-preview
-APP_ENV=development
-JWT_SECRET=your_secret_here
-```
-
-### 3) Start Stack
-
-```bash
 docker compose up -d --build
 ```
 
-This builds and starts:
-- **hireflow-backend**: FastAPI on port 8000 (exposed as 8001)
-- **hireflow-frontend**: React on port 5173
-- **hireflow-postgres**: Optional persistence (port 5433)
-- **hireflow-redis**: Optional caching (port 6380)
+This starts:
+- **hireflow-backend**: FastAPI on port 80 (mapped to 8000 inside the container)
+- **hireflow-frontend**: Vite React app on port 5173
+- **hireflow-postgres**: PostgreSQL on port 5433
+- **hireflow-redis**: Redis on port 6380
 
-### 4) Verify Services
+### 4) Current Runtime Environment
+
+The backend runtime is configured with the following Google Cloud variables in [docker-compose.yml](docker-compose.yml):
+
+```bash
+LLM_PROVIDER=gemini
+GEMINI_USE_ADC=true
+GEMINI_MODEL=gemini-2.5-flash
+GOOGLE_CLOUD_PROJECT=<your-gcp-project-id>
+GOOGLE_CLOUD_LOCATION=us-central1
+```
+
+### 5) Verify Services
 
 ```bash
 # Backend health
-curl http://localhost:8001/health
+curl http://localhost/health
 # Expected: {"status":"ok","service":"HireFlow"}
 
 # Frontend
-curl http://localhost:5173 | grep -o "<title>.*</title>"
-# Expected: <title>HireFlow</title>
+curl http://localhost:5173 | head
 
-# Verify hybrid RAG is loaded
-docker compose exec -T backend python3 -c \
-  "from sentence_transformers import SentenceTransformer; \
-   print('✓ SentenceTransformer loaded')"
+# Confirm the container sees ADC and project values
+docker compose exec -T backend python - <<'PY'
+import os
+print(os.getenv('GOOGLE_CLOUD_PROJECT'))
+print(os.getenv('GOOGLE_CLOUD_LOCATION'))
+PY
 ```
 
-### 5) Test End-to-End
+### 6) Test End-to-End
 
 ```bash
 # Upload a candidate resume
@@ -759,18 +799,13 @@ Skills: Python, Kubernetes, AWS, Docker, Terraform
 Summary: Built scalable cloud infrastructure on AWS using Kubernetes
 EOF
 
-curl -X POST http://localhost:8001/candidates/upload \
-  -F "file=@/tmp/sample_resume.txt;type=text/plain" | jq .
-
-# Query hybrid RAG (semantic search)
-curl -X POST http://localhost:8001/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "cloud infrastructure kubernetes", "top_k": 5, "entity_type": "candidate"}' | jq .
+curl -X POST http://localhost/candidates/upload \
+  -F "file=@/tmp/sample_resume.txt;type=text/plain" | python3 -m json.tool
 
 # Ask copilot
-curl -X POST http://localhost:8001/agent/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Show me candidates with kubernetes skills"}' | jq .answer
+curl -sS -X POST http://localhost/agent/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"I need a candidate for business analyst"}' | python3 -m json.tool | head -n 60
 ```
 
 ---
@@ -801,26 +836,47 @@ docker system prune -a
 2. Check RAG index was built: `curl -X POST http://localhost:8001/rag/reindex`
 3. Try simpler query with known terms
 
-### LLM Provider Unavailable
+### LLM Provider Unavailable / ADC Not Working
 
-**Symptom**: Chat returns "LLM provider is unavailable"  
+**Symptom**: Chat falls back or returns provider errors  
 **Solution**:
+
 ```bash
-# Verify API key is set inside container
-docker compose exec -T backend \
-  /bin/sh -lc 'echo GEMINI_API_KEY=$GEMINI_API_KEY'
+# Confirm ADC credentials exist on the VM
+ls -l ~/.config/gcloud/application_default_credentials.json
 
-# Check Gemini quota (visit https://ai.studio/projects)
-# Verify model name matches current Gemini models
+# Recreate ADC with Cloud Platform scope
+rm -f ~/.config/gcloud/application_default_credentials.json
+gcloud auth application-default login \
+  --project <your-gcp-project-id> \
+  --scopes=https://www.googleapis.com/auth/cloud-platform
 
-# Test direct API call
-docker compose exec -T backend python3 -c \
-  "from google import genai; \
-   c = genai.Client(api_key='${GEMINI_API_KEY}'); \
-   r = c.models.generate_content(model='models/gemini-3-flash-preview', \
-                                  contents='Hello'); \
-   print(r.text)"
+# Confirm the project and region are set in the backend container
+docker compose exec -T backend env | grep -E 'GOOGLE_CLOUD|GEMINI'
+
+# Test Vertex AI directly
+# Use the same project and region configured in Docker Compose
+
+docker compose exec -T backend python - <<'PY'
+from google import genai
+from google.genai.types import HttpOptions
+
+client = genai.Client(
+    vertexai=True,
+    project='your-gcp-project-id',
+    location='us-central1',
+    http_options=HttpOptions(api_version='v1'),
+)
+
+response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents='Reply with exactly: HireFlow Vertex AI connection works.'
+)
+print(response.text)
+PY
 ```
+
+If this succeeds, the app is using the correct Google Cloud auth path. If it fails, verify Vertex AI is enabled in the project and the account has the required IAM roles.
 
 ### Frontend Can't Reach Backend
 
@@ -1019,9 +1075,9 @@ Built with ❤️ using:
 
 ---
 
-**Last Updated**: 2026-09-19  
-**Version**: 0.3.0  
-**Status**: Production-Ready (Beta)
+**Last Updated**: 2026-09-20  
+**Version**: 0.3.1  
+**Status**: Production-Ready (Beta) – Google Cloud VM + Vertex AI ADC deployment
 
 Start hiring smarter, fairer, and faster with HireFlow AI. 🚀
 

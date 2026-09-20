@@ -928,6 +928,47 @@ label span {
   color: #e5e7eb;
 }
 
+.chat-rich-content {
+  display: grid;
+  gap: 10px;
+}
+
+.chat-rich-content p {
+  margin: 0;
+}
+
+.chat-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #2b3952;
+  border-radius: 8px;
+}
+
+.chat-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+  background: #0d172a;
+}
+
+.chat-table th,
+.chat-table td {
+  text-align: left;
+  border-bottom: 1px solid #243149;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+  vertical-align: top;
+}
+
+.chat-table th {
+  color: #c7d2e7;
+  font-weight: 600;
+  background: #13203a;
+}
+
+.chat-table tr:last-child td {
+  border-bottom: none;
+}
+
 .chat-message.loading {
   justify-content: flex-start;
 }

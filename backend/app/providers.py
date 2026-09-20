@@ -20,7 +20,10 @@ class LocalFallbackProvider:
 class GeminiProvider:
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("LLM_API_KEY")
-        self.model = os.getenv("GEMINI_MODEL", "models/gemini-3-flash-preview")
+        self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+        self.use_adc = (os.getenv("GEMINI_USE_ADC", "false").strip().lower() == "true")
+        self.gcp_project = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+        self.gcp_location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1").strip()
         self.use_google_search = (os.getenv("GEMINI_USE_GOOGLE_SEARCH", "false").strip().lower() == "true")
 
     def _is_placeholder(self) -> bool:
@@ -28,13 +31,26 @@ class GeminiProvider:
         return key in {"", "replace_me", "changeme", "your_key_here"}
 
     def generate(self, prompt: str, *, system_prompt: str = "") -> str:
-        if self._is_placeholder():
+        if not self.use_adc and self._is_placeholder():
             return LocalFallbackProvider().generate(prompt, system_prompt=system_prompt)
 
         try:
             from google import genai
 
-            client = genai.Client(api_key=self.api_key)
+            if self.use_adc:
+                if not self.gcp_project:
+                    return (
+                        "I’m operating in local fallback mode because ADC is enabled but GOOGLE_CLOUD_PROJECT is not set. "
+                        "Set GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION for Vertex AI Gemini access."
+                    )
+                client = genai.Client(
+                    vertexai=True,
+                    project=self.gcp_project,
+                    location=self.gcp_location,
+                )
+            else:
+                client = genai.Client(api_key=self.api_key)
+
             tools = [{"type": "google_search"}] if self.use_google_search else None
             generation_config = {
                 "temperature": float(os.getenv("LLM_TEMPERATURE", "0.2")),
