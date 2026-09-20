@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { AuditTrailPage } from './pages/AuditTrailPage';
 import { CandidateProfilePage } from './pages/CandidateProfilePage';
+import { ChatPage } from './pages/ChatPage';
 import { EvaluationsPage } from './pages/EvaluationsPage';
 import { InterviewDetailPage } from './pages/InterviewDetailPage';
 import { InterviewsPage } from './pages/InterviewsPage';
@@ -18,6 +19,7 @@ function App() {
       <Route path="/" element={<AppShell />}>
         <Route index element={<OverviewPage />} />
         <Route path="dashboard" element={<Navigate to="/" replace />} />
+        <Route path="chat" element={<ChatPage />} />
         <Route path="jobs" element={<JobsPage />} />
         <Route path="jobs/:id" element={<JobDetailPage />} />
         <Route path="jobs/:id/candidates" element={<JobCandidatesPage />} />

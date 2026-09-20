@@ -45,7 +45,6 @@ export function JobCandidatesPage() {
         </div>
         <div className="inline-actions">
           <button type="button" className="ghost-btn">Filters</button>
-          <button type="button" className="ghost-btn">Compare</button>
           <button type="button" className="ghost-btn">Export</button>
         </div>
       </section>
@@ -102,7 +101,6 @@ export function JobCandidatesPage() {
                   <td>
                     <div className="row-actions">
                       <Link to={`/candidates/${candidate.candidate_id}`}>View</Link>
-                      <button type="button" className="link-like">Compare</button>
                       <button type="button" className="link-like">Interview</button>
                     </div>
                   </td>
