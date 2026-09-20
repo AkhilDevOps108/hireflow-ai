@@ -12,6 +12,7 @@ const groups: Group[] = [
   {
     label: 'Workspace',
     items: [
+      { to: '/chat', label: 'AI Assistant' },
       { to: '/jobs', label: 'Jobs' },
       { to: '/candidates', label: 'Talent Pool' },
       { to: '/interviews', label: 'Interviews' },

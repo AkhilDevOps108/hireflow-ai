@@ -31,7 +31,7 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/hireflow
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: change-me-in-production
-      APP_ENV: development
+      APP_ENV: production
       LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-models/gemini-3-flash-preview}
@@ -40,7 +40,7 @@ services:
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
     ports:
-      - "8001:8000"
+      - "80:8000"
     depends_on:
       postgres:
         condition: service_healthy
